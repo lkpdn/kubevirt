@@ -68,12 +68,16 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 
 			server.AppendHandlers(
 				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/apis/kubevirt.io/v1alpha2/namespaces/default/virtualmachineinstances/testvmi"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, vmi),
+				),
+				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/api/v1/namespaces/default/pods"),
 					ghttp.RespondWithJSONEncoded(http.StatusOK, podList),
 				),
 			)
 
-			podName, httpStatusCode, err := app.remoteExecInfo(vmi)
+			podName, httpStatusCode, err := app.remoteExecInfo("testvmi", "default")
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(podName).To(Equal("madeup-name"))
@@ -86,7 +90,14 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 			vmi.Status.Phase = v1.Succeeded
 			vmi.ObjectMeta.SetUID(uuid.NewUUID())
 
-			_, httpStatusCode, err := app.remoteExecInfo(vmi)
+			server.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/apis/kubevirt.io/v1alpha2/namespaces/default/virtualmachineinstances/testvmi"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, vmi),
+				),
+			)
+
+			_, httpStatusCode, err := app.remoteExecInfo("testvmi", "default")
 
 			Expect(err).To(HaveOccurred())
 			Expect(httpStatusCode).To(Equal(http.StatusBadRequest))
@@ -103,12 +114,16 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 
 			server.AppendHandlers(
 				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/apis/kubevirt.io/v1alpha2/namespaces/default/virtualmachineinstances/testvmi"),
+					ghttp.RespondWithJSONEncoded(http.StatusOK, vmi),
+				),
+				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("GET", "/api/v1/namespaces/default/pods"),
 					ghttp.RespondWithJSONEncoded(http.StatusOK, podList),
 				),
 			)
 
-			_, httpStatusCode, err := app.remoteExecInfo(vmi)
+			_, httpStatusCode, err := app.remoteExecInfo("testvmi", "default")
 
 			Expect(err).To(HaveOccurred())
 			Expect(httpStatusCode).To(Equal(http.StatusBadRequest))

@@ -47,9 +47,12 @@ type SubresourceAPIApp struct {
 	VirtCli kubecli.KubevirtClient
 }
 
-func (app *SubresourceAPIApp) requestHandler(request *restful.Request, response *restful.Response, vmi *v1.VirtualMachineInstance, cmd []string) {
+func (app *SubresourceAPIApp) requestHandler(request *restful.Request, response *restful.Response, cmd []string) {
 
-	podName, httpStatusCode, err := app.remoteExecInfo(vmi)
+	vmiName := request.PathParameter("name")
+	namespace := request.PathParameter("namespace")
+
+	podName, httpStatusCode, err := app.remoteExecInfo(vmiName, namespace)
 	if err != nil {
 		log.Log.Reason(err).Error("Failed to gather remote exec info for subresource request.")
 		response.WriteError(httpStatusCode, err)
@@ -81,7 +84,7 @@ func (app *SubresourceAPIApp) requestHandler(request *restful.Request, response 
 	httpResponseChan := make(chan int)
 	copyErr := make(chan error)
 	go func() {
-		httpCode, err := remoteExecHelper(podName, vmi.Namespace, cmd, inReader, outWriter)
+		httpCode, err := remoteExecHelper(podName, namespace, cmd, inReader, outWriter)
 		log.Log.Errorf("%v", err)
 		httpResponseChan <- httpCode
 	}()
@@ -114,39 +117,18 @@ func (app *SubresourceAPIApp) VNCRequestHandler(request *restful.Request, respon
 
 	vmiName := request.PathParameter("name")
 	namespace := request.PathParameter("namespace")
+
 	cmd := []string{"/usr/share/kubevirt/virt-launcher/sock-connector", fmt.Sprintf("/var/run/kubevirt-private/%s/%s/virt-%s", namespace, vmiName, "vnc")}
-
-	vmi, code, err := app.fetchVirtualMachineInstance(vmiName, namespace)
-	if err != nil {
-		log.Log.Reason(err).Error("Failed to gather remote exec info for subresource request.")
-		response.WriteError(code, err)
-		return
-	}
-
-	// If there are no graphics devices present, we can't proceed
-	if vmi.Spec.Domain.Devices.AutoattachGraphicsDevice != nil && *vmi.Spec.Domain.Devices.AutoattachGraphicsDevice == false {
-		err := fmt.Errorf("No graphics devices are present.")
-		log.Log.Reason(err).Error("Can't establish VNC connection.")
-		response.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
-	app.requestHandler(request, response, vmi, cmd)
+	app.requestHandler(request, response, cmd)
 }
 
 func (app *SubresourceAPIApp) ConsoleRequestHandler(request *restful.Request, response *restful.Response) {
 	vmiName := request.PathParameter("name")
 	namespace := request.PathParameter("namespace")
+
 	cmd := []string{"/usr/share/kubevirt/virt-launcher/sock-connector", fmt.Sprintf("/var/run/kubevirt-private/%s/%s/virt-%s", namespace, vmiName, "serial0")}
 
-	vmi, code, err := app.fetchVirtualMachineInstance(vmiName, namespace)
-	if err != nil {
-		log.Log.Reason(err).Error("Failed to gather remote exec info for subresource request.")
-		response.WriteError(code, err)
-		return
-	}
-
-	app.requestHandler(request, response, vmi, cmd)
+	app.requestHandler(request, response, cmd)
 }
 
 func (app *SubresourceAPIApp) findPod(namespace string, name string) (string, error) {
@@ -168,26 +150,22 @@ func (app *SubresourceAPIApp) findPod(namespace string, name string) (string, er
 	return podList.Items[0].ObjectMeta.Name, nil
 }
 
-func (app *SubresourceAPIApp) fetchVirtualMachineInstance(name string, namespace string) (*v1.VirtualMachineInstance, int, error) {
+func (app *SubresourceAPIApp) remoteExecInfo(name string, namespace string) (string, int, error) {
+	podName := ""
 
 	vmi, err := app.VirtCli.VirtualMachineInstance(namespace).Get(name, &k8smetav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return nil, http.StatusNotFound, goerror.New(fmt.Sprintf("VirtualMachineInstance %s in namespace %s not found.", name, namespace))
+			return "", http.StatusNotFound, goerror.New(fmt.Sprintf("VirtualMachineInstance %s in namespace %s not found.", name, namespace))
 		}
-		return nil, http.StatusInternalServerError, err
+		return podName, http.StatusInternalServerError, err
 	}
-	return vmi, 0, nil
-}
-
-func (app *SubresourceAPIApp) remoteExecInfo(vmi *v1.VirtualMachineInstance) (string, int, error) {
-	podName := ""
 
 	if vmi.IsRunning() == false {
 		return podName, http.StatusBadRequest, goerror.New(fmt.Sprintf("Unable to connect to VirtualMachineInstance because phase is %s instead of %s", vmi.Status.Phase, v1.Running))
 	}
 
-	podName, err := app.findPod(vmi.Namespace, vmi.Name)
+	podName, err = app.findPod(namespace, name)
 	if err != nil {
 		return podName, http.StatusBadRequest, fmt.Errorf("unable to find matching pod for remote execution: %v", err)
 	}

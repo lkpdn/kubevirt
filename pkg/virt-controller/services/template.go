@@ -198,9 +198,7 @@ func (t *templateService) RenderLaunchManifest(vmi *v1.VirtualMachineInstance) (
 	} else {
 		// Add overhead memory
 		memoryRequest := resources.Requests[k8sv1.ResourceMemory]
-		if !vmi.Spec.Domain.Resources.OvercommitGuestOverhead {
-			memoryRequest.Add(*memoryOverhead)
-		}
+		memoryRequest.Add(*memoryOverhead)
 		resources.Requests[k8sv1.ResourceMemory] = memoryRequest
 
 		if memoryLimit, ok := resources.Limits[k8sv1.ResourceMemory]; ok {
@@ -445,9 +443,7 @@ func getMemoryOverhead(domain v1.DomainSpec) *resource.Quantity {
 	overhead.Add(resource.MustParse("8Mi"))
 
 	// Add video RAM overhead
-	if domain.Devices.AutoattachGraphicsDevice == nil || *domain.Devices.AutoattachGraphicsDevice == true {
-		overhead.Add(resource.MustParse("16Mi"))
-	}
+	overhead.Add(resource.MustParse("16Mi"))
 
 	return overhead
 }
