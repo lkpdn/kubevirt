@@ -1173,6 +1173,30 @@ var _ = Describe("Validating Webhook", func() {
 				Expect(causes[0].Field).To(Equal("fake.domain.devices.interfaces[0].pciAddress"))
 			}
 		})
+
+		It("should accept valid driver", func() {
+			vmi := v1.NewMinimalVMI("testvm")
+			vmi.Spec.Domain.Devices.Interfaces = []v1.Interface{*v1.DefaultNetworkInterface()}
+			vmi.Spec.Networks = []v1.Network{*v1.DefaultPodNetwork()}
+			for _, driver := range []string{"qemu", "vhost"} {
+				vmi.Spec.Domain.Devices.Interfaces[0].Driver = driver
+				causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vmi.Spec)
+				// if this is processed correctly, it should not result in any error
+				Expect(len(causes)).To(Equal(0))
+			}
+		})
+
+		It("should reject invalid driver", func() {
+			vmi := v1.NewMinimalVMI("testvm")
+			vmi.Spec.Domain.Devices.Interfaces = []v1.Interface{*v1.DefaultNetworkInterface()}
+			vmi.Spec.Networks = []v1.Network{*v1.DefaultPodNetwork()}
+			for _, driver := range []string{"invalid_driver"} {
+				vmi.Spec.Domain.Devices.Interfaces[0].Driver = driver
+				causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vmi.Spec)
+				Expect(len(causes)).To(Equal(1))
+				Expect(causes[0].Field).To(Equal("fake.domain.devices.interfaces[0].name"))
+			}
+		})
 	})
 	Context("with cpu pinning", func() {
 		var vmi *v1.VirtualMachineInstance

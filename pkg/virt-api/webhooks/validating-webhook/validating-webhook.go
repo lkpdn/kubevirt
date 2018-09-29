@@ -779,6 +779,25 @@ func ValidateVirtualMachineInstanceSpec(field *k8sfield.Path, spec *v1.VirtualMa
 				})
 			}
 
+			// Check if the interface driver is valid
+			if iface.Slirp != nil {
+				if iface.Driver != "" && iface.Driver != "qemu" {
+					causes = append(causes, metav1.StatusCause{
+						Type:    metav1.CauseTypeFieldValueInvalid,
+						Message: fmt.Sprintf("Slirp interface works with qemu driver only"),
+						Field:   field.Child("domain", "devices", "interfaces").Index(idx).Child("name").String(),
+					})
+				}
+			} else if iface.Bridge != nil {
+				if iface.Driver != "" && iface.Driver != "qemu" && iface.Driver != "vhost" {
+					causes = append(causes, metav1.StatusCause{
+						Type:    metav1.CauseTypeFieldValueInvalid,
+						Message: fmt.Sprintf("Bridge interface works with qemu or vhost driver only"),
+						Field:   field.Child("domain", "devices", "interfaces").Index(idx).Child("name").String(),
+					})
+				}
+			}
+
 			// Check if the interface name is unique
 			if _, networkAlreadyUsed := networkInterfaceMap[iface.Name]; networkAlreadyUsed {
 				causes = append(causes, metav1.StatusCause{
